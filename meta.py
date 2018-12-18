@@ -170,63 +170,65 @@ class CSSTokenizer:
         self.last_ch = next(self.it)
 
     def tokens(self):
-        while True:
-            self.token_type = ''
-            self.token_value = ''
+        try:
+            while True:
+                self.token_type = ''
+                self.token_value = ''
 
-            self.skip_space()
+                self.skip_space()
 
-            if not self.expect_property:  # outside { } - search for selector
-                if self.last_ch.isalpha() or self.last_ch in ['_', '-', '#', '.']:  # selector
-                    self.token_type = 'selector'
+                if not self.expect_property:  # outside { } - search for selector
+                    if self.last_ch.isalpha() or self.last_ch in ['_', '-', '#', '.']:  # selector
+                        self.token_type = 'selector'
 
-                    while self.last_ch.isalnum() or self.last_ch in ['_', '-', '.', '#', ',', '>', '+', '~', ' ']:
-                        self.consume_char()
-
-                    if self.last_ch == '{':
-                        self.token_value.rstrip()
-                        yield self.token_type, self.token_value
-
-                        self.last_ch = next(self.it)
-                        self.expect_property = True
-                    else:
-                        print("ERROR: Unexpected character in selector: " + self.last_ch)
-                        return
-                else:
-                    print("ERROR: expected selector. Unexpected character: " + self.last_ch)
-                    return
-            else:  # inside { }
-                if self.last_ch == '}':
-                    self.last_ch = next(self.it)
-                    self.expect_property = False
-                    yield 'prop_end', ''
-
-                    self.tokens()
-                elif self.last_ch.isalpha() or self.last_ch == '_':  # property key
-                    self.token_type = 'property'
-
-                    while self.last_ch.isalnum() or self.last_ch in ['_', '-']:  # consume property key
-                        self.consume_char()
-
-                    self.skip_space()
-
-                    if self.last_ch == ':':
-                        self.consume_char()
-                        self.skip_space()
-
-                        while not self.last_ch.isspace() and self.last_ch != ';':  # consume property value
+                        while self.last_ch.isalnum() or self.last_ch in ['_', '-', '.', '#', ',', '>', '+', '~', ' ']:
                             self.consume_char()
 
-                        yield self.token_type, self.token_value
+                        if self.last_ch == '{':
+                            self.token_value.rstrip()
+                            yield self.token_type, self.token_value
+
+                            self.last_ch = next(self.it)
+                            self.expect_property = True
+                        else:
+                            print("ERROR: Unexpected character in selector: " + self.last_ch)
+                            return
+                    else:
+                        print("ERROR: expected selector. Unexpected character: " + self.last_ch)
+                        return
+                else:  # inside { }
+                    if self.last_ch == '}':
+                        self.last_ch = next(self.it)
+                        self.expect_property = False
+                        yield 'prop_end', ''
+
+                        self.tokens()
+                    elif self.last_ch.isalpha() or self.last_ch == '_':  # property key
+                        self.token_type = 'property'
+
+                        while self.last_ch.isalnum() or self.last_ch in ['_', '-']:  # consume property key
+                            self.consume_char()
 
                         self.skip_space()
 
-                        if self.last_ch == ';':
-                            self.last_ch = next(self.it)
-                    else:
-                        print("ERROR: expected property value.")
-                        return
+                        if self.last_ch == ':':
+                            self.consume_char()
+                            self.skip_space()
 
+                            while not self.last_ch.isspace() and self.last_ch != ';':  # consume property value
+                                self.consume_char()
+
+                            yield self.token_type, self.token_value
+
+                            self.skip_space()
+
+                            if self.last_ch == ';':
+                                self.last_ch = next(self.it)
+                        else:
+                            print("ERROR: expected property value.")
+                            return
+        except StopIteration:
+            pass
 
 class MetaCSSParser:
     package_path = None

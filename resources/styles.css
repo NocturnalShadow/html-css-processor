@@ -1,5 +1,8 @@
+div h4 {
+    background-color: red
+    align: left
+}
+
 body, h1 { color: purple }
-h2 h3 { color: purple }
-div > p { color: purple }
-div.solid { background-color: Gray }
-.solid h1 { background-color: Gray }
+
+.wide { width: 250px }
