@@ -71,8 +71,10 @@ class {class_name}({base_class}):
             css_parser = MetaCSSParser()
             for (key, value) in attributes:
                 if key == "href":
-                    css_parser.generate(value, self.package, self.package_path + '/css/' + class_name + '/')
-
+                    try:
+                        css_parser.generate(value, self.package, self.package_path + '/css/' + class_name + '/')
+                    except FileNotFoundError:
+                        print("WARNING: File", value, "was not found.")
         return class_name
 
 
