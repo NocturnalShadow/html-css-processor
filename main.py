@@ -22,7 +22,7 @@ while True:
             print("HTML file generated: ./%s/%s.html" % (generated_html_path, package_name))
         elif file_extension == '.css':
             print("Generating package '%s'" % package_name)
-            css_parser.generate(file, 'styles')
+            css_parser.generate(file, package_name)
         else:
             print("Unsupported file extension.")
     except Exception as e:

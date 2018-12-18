@@ -32,8 +32,9 @@ generated_packages_path = 'generated/packages'
 
 
 class HtmlClassGenerator:
-    def __init__(self, package):
+    def __init__(self, package, package_path):
         self.package = package
+        self.package_path = package_path
         self.tag_occurrence = {}
 
     def create_from_html_tag(self, tag_name, attributes, base_class):
@@ -66,6 +67,12 @@ class {class_name}({base_class}):
         with open(module, 'w') as file:
             file.write(template.format(**args))
 
+        if tag_name == 'link' and ("rel", "stylesheet") in attributes:
+            css_parser = MetaCSSParser()
+            for (key, value) in attributes:
+                if key == "href":
+                    css_parser.generate(value, self.package, self.package_path + '/css/' + class_name + '/')
+
         return class_name
 
 
@@ -76,7 +83,7 @@ class MetaHTMLParser(HTMLParser):
 
     def generate(self, html_file, package_name):
         self.package_path = generated_packages_path + '/' + package_name + '/'
-        self.class_generator = HtmlClassGenerator(package_name)
+        self.class_generator = HtmlClassGenerator(package_name, self.package_path)
 
         with open(html_file, 'r') as file:
             makedirs(self.package_path, exist_ok=True)
@@ -233,11 +240,14 @@ class CSSTokenizer:
 class MetaCSSParser:
     package_path = None
 
-    def generate(self, css_file, package_name):
-        self.package_path = generated_packages_path + '/css/' + package_name + '/'
+    def generate(self, css_file, package_name, package_path=None):
         with open(css_file, 'r') as file:
-            makedirs(self.package_path, exist_ok=True)
-            self.parse(str(file.read()))
+            self.generate_from_text(str(file.read()), package_name, package_path)
+
+    def generate_from_text(self, css_text, package_name, package_path=None):
+        self.package_path = package_path if package_path else generated_packages_path + '/css/' + package_name + '/'
+        makedirs(self.package_path, exist_ok=True)
+        self.parse(css_text)
 
         package_init_code = '''import glob
 from os.path import dirname, basename, isfile
