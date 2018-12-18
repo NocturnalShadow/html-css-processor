@@ -153,60 +153,134 @@ def generate_html_from_package(package_name):
         file.write(object_to_html(module.html1.Html1()))
 
 
-# class MetaCSSParser:
-#     package_path = None
-#
-#     def generate(self, css_file, package_name):
-#         self.package_path = generated_packages_path + '/css/' + package_name + '/'
-#         with open(css_file, 'r') as file:
-#             makedirs(self.package_path, exist_ok=True)
-#             self.parse(str(file.read()))
-#
-#         package_init_code = '''import glob
-# from os.path import dirname, basename, isfile
-#
-# modules = glob.glob(dirname(__file__) + "/*.py")
-#
-# __all__ = [basename(module)[:-3] for module in modules if isfile(module) and not module.endswith('__init__.py')]
-# '''
-#         with open(self.package_path + '__init__.py', 'w') as file:
-#             file.write(package_init_code)
-#
-#     def parse(self, text):
-#         tokenizer = Tokenizer(text)
-#
-#         token = tokenizer.get_token()
-#         while token.type:
-#             print(token.value)
-#             token = tokenizer.get_token()
-#
-#
-# class Tokenizer:
-#     Result = collections.namedtuple('type', 'value')
-#
-#     def __init__(self, text):
-#         self.text = iter(text)
-#         self.toke_type = None
-#         self.token_value = ''
-#
-#         # self.expect_declaration = False
-#         # self.expect_selector = False
-#
-#     def get_token(self):
-#         self.toke_type = None
-#         self.token_value = ''
-#
-#         for char in self.text:
-#             if char.isspace():
-#                 continue
-#             if not self.expect_declaration:
-#                 if not self.toke_type and (char.isalpha() or char in ['.', '#']):
-#                     self.toke_type = 'selector'
-#
-#             self.token_value += char
-#
-#         return self.Result(self.toke_type, self.token_value)
-#
-# css_parser = MetaCSSParser()
-#
-# css_parser.generate('resources/styles.css', 'styles')
+class CSSTokenizer:
+    def __init__(self, str):
+        self.token_type = ''
+        self.token_value = ''
+        self.expect_property = False
+        self.it = iter(str)
+        self.last_ch = next(self.it)
+
+    def skip_space(self):
+        while self.last_ch.isspace():
+            self.last_ch = next(self.it)
+
+    def consume_char(self):
+        self.token_value += self.last_ch
+        self.last_ch = next(self.it)
+
+    def tokens(self):
+        while True:
+            self.token_type = ''
+            self.token_value = ''
+
+            self.skip_space()
+
+            if not self.expect_property:  # outside { } - search for selector
+                if self.last_ch.isalpha() or self.last_ch in ['_', '-', '#', '.']:  # selector
+                    self.token_type = 'selector'
+
+                    while self.last_ch.isalnum() or self.last_ch in ['_', '-', '.', '#', ',', '>', '+', '~', ' ']:
+                        self.consume_char()
+
+                    if self.last_ch == '{':
+                        self.token_value.rstrip()
+                        yield self.token_type, self.token_value
+
+                        self.last_ch = next(self.it)
+                        self.expect_property = True
+                    else:
+                        print("ERROR: Unexpected character in selector: " + self.last_ch)
+                        return
+                else:
+                    print("ERROR: expected selector. Unexpected character: " + self.last_ch)
+                    return
+            else:  # inside { }
+                if self.last_ch == '}':
+                    self.last_ch = next(self.it)
+                    self.expect_property = False
+                    yield 'prop_end', ''
+
+                    self.tokens()
+                elif self.last_ch.isalpha() or self.last_ch == '_':  # property key
+                    self.token_type = 'property'
+
+                    while self.last_ch.isalnum() or self.last_ch in ['_', '-']:  # consume property key
+                        self.consume_char()
+
+                    self.skip_space()
+
+                    if self.last_ch == ':':
+                        self.consume_char()
+                        self.skip_space()
+
+                        while not self.last_ch.isspace() and self.last_ch != ';':  # consume property value
+                            self.consume_char()
+
+                        yield self.token_type, self.token_value
+
+                        self.skip_space()
+
+                        if self.last_ch == ';':
+                            self.last_ch = next(self.it)
+                    else:
+                        print("ERROR: expected property value.")
+                        return
+
+
+class MetaCSSParser:
+    package_path = None
+
+    def generate(self, css_file, package_name):
+        self.package_path = generated_packages_path + '/css/' + package_name + '/'
+        with open(css_file, 'r') as file:
+            makedirs(self.package_path, exist_ok=True)
+            self.parse(str(file.read()))
+
+        package_init_code = '''import glob
+from os.path import dirname, basename, isfile
+
+modules = glob.glob(dirname(__file__) + "/*.py")
+
+__all__ = [basename(module)[:-3] for module in modules if isfile(module) and not module.endswith('__init__.py')]
+'''
+        with open(self.package_path + '__init__.py', 'w') as file:
+            file.write(package_init_code)
+
+    def parse(self, text):
+        id = 0
+        token_iter = iter(CSSTokenizer(text).tokens())
+        for (token_type, token_value) in token_iter:
+            if token_type == 'selector':
+                id += 1
+                declarations = []
+                for (token_type, token_value) in token_iter:
+                    if token_type == 'property':
+                        declarations.append(token_value)
+                    else:
+                        break
+
+                self.generate_class("CSS" + str(id), declarations)
+            else:
+                print("ERROR: Expected selector.")
+
+    def generate_class(self, class_name, declarations):
+        args = {
+            'class_name': class_name,
+            'attributes': '\n'.join(
+                ['\t\tself["%s"] = "%s"' % tuple(declaration.split(":")) for declaration in declarations]) if declarations else ''
+        }
+
+        template = '''# Generated by MetaCSSParser
+class {class_name}(dict):
+\tdef __init__(self, *args, **kwargs):
+\t\tself.store = dict()
+\t\tself.update(dict(*args, **kwargs))
+{attributes}
+'''
+
+        module = self.package_path + class_name.lower() + '.py'
+        with open(module, 'w') as file:
+            file.write(template.format(**args))
+
+        return class_name
